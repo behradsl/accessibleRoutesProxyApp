@@ -1,0 +1,70 @@
+[
+  {
+    "method": "POST",
+    "path": "/Services/FAM/TransactionProcessingService.svc/login"
+  },
+  {
+    "method": "POST",
+    "path": "/Services/FAM/EntranceService.svc/GetAcquisitionReceiptList"
+  },
+  {
+    "method": "POST",
+    "path": "/Services/FAM/EntranceService.svc/GetAcquisitionReceiptItems"
+  },
+  {
+    "method": "POST",
+    "path": "/Services/FAM/EntranceService.svc/GetFixedAssetParts"
+  },
+  {
+    "method": "POST",
+    "path": "/Services/FAM/EntranceService.svc/GetCounterParts"
+  },
+  {
+    "method": "POST",
+    "path": "/Services/FAM/EntranceService.svc/AssetGroupSuggestionPerPart"
+  },
+  {
+    "method": "POST",
+    "path": "/Services/FAM/EntranceService.svc/SaveAcquisitionReceipt"
+  },
+  {
+    "method": "POST",
+    "path": "/Services/FAM/EntranceService.svc/AssignPlaqueNumber"
+  },
+  {
+    "method": "GET",
+    "path": "/Services/FAM/TransactionProcessingService.svc/GetAssetGroup"
+  },
+  {
+    "method": "GET",
+    "path": "/Services/FAM/TransactionProcessingService.svc/GetBranch"
+  },
+  {
+    "method": "GET",
+    "path": "/Services/FAM/TransactionProcessingService.svc/GetCollector"
+  },
+  {
+    "method": "GET",
+    "path": "/Services/FAM/EntranceService.svc/GetDepreciationMethodList"
+  },
+  {
+    "method": "POST",
+    "path": "/Services/FAM/EntranceService.svc/DeleteAcquisitionReceipt"
+  },
+  {
+    "method": "GET",
+    "path": "/Services/FAM/TransactionProcessingService.svc/GetCostCenter"
+  },
+  {
+    "method": "GET",
+    "path": "/Services/FAM/TransactionProcessingService.svc/GetDeliverer"
+  },
+  {
+    "method": "GET",
+    "path": "/Services/FAM/TransactionProcessingService.svc/GetSettlementPlace"
+  },
+  {
+    "method": "POST",
+    "path": "/Services/FAM/TransactionProcessingService.svc/GetAssetInventoryList"
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "erpBaseUrl": "http://172.21.111.108:8080",
+  "publicBaseUrl": "http://172.21.111.95:5080",
+  "publicPathPrefix": "",
+  "listenHost": "0.0.0.0",
+  "port": 5080,
+  "timeoutMs": 180000,
+  "maxBodyBytes": 20971520,
+  "maxLogBytes": 5242880
+}
