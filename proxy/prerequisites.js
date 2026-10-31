@@ -48,6 +48,7 @@ function readCommandVersion(file, args) {
       encoding: 'utf8',
       timeout: 10000,
       windowsHide: true,
+      stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
   } catch {
     return '';
@@ -56,10 +57,8 @@ function readCommandVersion(file, args) {
 
 function installedNodeVersion() {
   const standard = path.join(process.env.ProgramFiles || 'C:\\Program Files', 'nodejs', 'node.exe');
-  if (fs.existsSync(standard)) return readCommandVersion(standard, ['-v']);
-  const found = readCommandVersion('where.exe', ['node']).split(/\r?\n/).find(Boolean);
-  if (found && fs.existsSync(found.trim())) return readCommandVersion(found.trim(), ['-v']);
-  return '';
+  if (!fs.existsSync(standard)) return '';
+  return readCommandVersion(standard, ['-v']);
 }
 
 function inspectPrerequisites(options = {}) {
