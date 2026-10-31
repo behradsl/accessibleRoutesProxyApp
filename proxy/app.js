@@ -330,7 +330,7 @@ const page = `<!DOCTYPE html>
       </div>
       <div class="card">
         <h2>Programs and libraries</h2>
-        <p class="hint">Installs the Visual C++ libraries and Node.js when this computer does not already have them. Windows asks for administrator approval. Start in this window already includes its own copy of the program.</p>
+        <p class="hint">Opening this program installs Node.js and the Visual C++ libraries when this computer does not already have them. Those installers are carried inside the program, so the server does not need internet. Windows asks for administrator approval.</p>
         <ul id="prerequisites"></ul>
         <button type="button" class="secondary" id="install-prerequisites">Install missing</button>
         <p class="error" id="prerequisites-error"></p>
@@ -616,11 +616,29 @@ function openBrowser(url) {
   child.unref();
 }
 
+function prerequisitesReady() {
+  const current = inspectPrerequisites();
+  return !current.supported || current.items.every((item) => item.installed);
+}
+
+function ensurePrerequisites() {
+  if (process.env.FAM_SKIP_INSTALL === '1' || prerequisitesReady()) return Promise.resolve();
+  console.log('Installing Node.js and the Visual C++ libraries included in this program.');
+  const install = isAdmin() ? installMissingPrerequisites({ rootDir }) : elevateAndInstall();
+  return install.catch((err) => {
+    console.error(err.message);
+  });
+}
+
 function main() {
   if (process.argv.includes('--install-prerequisites')) {
     installAndQuit();
     return;
   }
+  ensurePrerequisites().then(startControlPage);
+}
+
+function startControlPage() {
   const ui = http.createServer((req, res) => {
     handle(req, res).catch((err) => {
       if (!res.headersSent) sendJson(res, 500, { error: err.message });

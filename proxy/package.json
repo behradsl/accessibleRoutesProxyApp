@@ -1,0 +1,14 @@
+{
+  "name": "fam-mobile-proxy",
+  "private": true,
+  "bin": "app.js",
+  "pkg": {
+    "assets": [
+      "vendor/vc_redist.x64.exe",
+      "vendor/node-x64.msi"
+    ],
+    "targets": [
+      "node22-win-x64"
+    ]
+  }
+}
