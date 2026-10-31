@@ -26,7 +26,7 @@ The API note did not include URLs for the warehouse voucher list, barcode print,
 
 ## Install on the portal server
 
-1. Open `FamMobileProxy.exe` and press **Install missing** if Visual C++ or Node.js is not already on the server. Node.js lands in `C:\Program Files\nodejs\node.exe`. The window itself already contains a copy, so Start works before that install. If you install Node somewhere else, change `processPath` in `web.config` once.
+1. Open `FamMobileProxy.exe`. If Visual C++ or Node.js is missing, the program installs the copies it carries and asks for administrator approval. The server does not need internet for that. Node.js lands in `C:\Program Files\nodejs\node.exe`. The window itself already contains a copy, so Start works even if that install is declined. If you install Node somewhere else, change `processPath` in `web.config` once.
 2. Install HttpPlatformHandler if IIS does not already have it and the public site will start `proxy.js`. It is included in the ASP.NET Core Hosting Bundle. Pressing Start in the window does not need IIS.
 3. Copy this folder to the portal server. Leave `logs` in place. IIS writes the process output there.
 4. In IIS Manager, add an application on the existing public site, beside the transportation portal. The application path is the Rahkaran virtual directory (`/0407.4`, or whatever this customer uses). The physical path is this folder. The application pool is **No Managed Code**.

@@ -3,3 +3,5 @@ logs/*
 !logs/.gitkeep
 dist/
 installers/
+vendor/*.exe
+vendor/*.msi

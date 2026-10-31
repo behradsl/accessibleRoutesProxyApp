@@ -13,6 +13,7 @@ const {
   nodeIsNewEnough,
   nodeMsiUrl,
   redistExitOk,
+  stageInstaller,
 } = require('./prerequisites.js');
 
 test('Node 20 and newer count as installed', () => {
@@ -65,6 +66,21 @@ test('a machine is ready only when the libraries and Node are present', () => {
     const oldNode = inspectPrerequisites({ systemDir: dir, nodeVersion: 'v18.0.0', arch: 'ia32' });
     assert.equal(oldNode.supported, false);
     assert.equal(oldNode.items.find((item) => item.id === 'node').installed, false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a bundled installer is copied to a normal file before it can be run', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fam-stage-'));
+  try {
+    const sourceDir = path.join(dir, 'vendor');
+    fs.mkdirSync(sourceDir);
+    const source = path.join(sourceDir, 'node-x64.msi');
+    fs.writeFileSync(source, 'installer-bytes');
+    const staged = stageInstaller(source, path.join(dir, 'out'), 'node-x64.msi');
+    assert.equal(fs.readFileSync(staged, 'utf8'), 'installer-bytes');
+    assert.equal(stageInstaller(path.join(sourceDir, 'missing.msi'), path.join(dir, 'out'), 'missing.msi'), '');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

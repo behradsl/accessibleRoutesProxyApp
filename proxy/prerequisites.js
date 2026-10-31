@@ -66,9 +66,14 @@ function inspectPrerequisites(options = {}) {
   const version = options.nodeVersion === undefined ? installedNodeVersion() : options.nodeVersion;
   const arch = options.arch || process.arch;
   const missingLibs = LIBRARY_FILES.filter((file) => !fs.existsSync(path.join(dir, file)));
+  const bundled = bundledInstallerPaths();
   return {
     arch,
     supported: arch === 'x64',
+    bundled: {
+      vcredist: fs.existsSync(bundled.vcredist),
+      node: fs.existsSync(bundled.node),
+    },
     items: [
       {
         id: 'vcredist',
@@ -141,24 +146,44 @@ function runProcess(file, args) {
   });
 }
 
+function bundledInstallerPaths() {
+  return {
+    vcredist: path.join(__dirname, 'vendor', 'vc_redist.x64.exe'),
+    node: path.join(__dirname, 'vendor', 'node-x64.msi'),
+  };
+}
+
+function stageInstaller(source, directory, name) {
+  if (!source || !fs.existsSync(source)) return '';
+  fs.mkdirSync(directory, { recursive: true });
+  const destination = path.join(directory, name);
+  if (path.resolve(source) !== path.resolve(destination)) fs.copyFileSync(source, destination);
+  return destination;
+}
+
 async function installVcRedist(directory) {
-  const installer = path.join(directory, 'vc_redist.x64.exe');
-  await download(VC_REDIST_URL, installer);
+  let installer = stageInstaller(bundledInstallerPaths().vcredist, directory, 'vc_redist.x64.exe');
+  if (!installer) {
+    installer = path.join(directory, 'vc_redist.x64.exe');
+    await download(VC_REDIST_URL, installer);
+  }
   const code = await runProcess(installer, ['/install', '/quiet', '/norestart']);
   if (!redistExitOk(code)) throw new Error(`Visual C++ library install failed (${code})`);
 }
 
 async function installNode(directory) {
-  const index = await download(NODE_INDEX_URL, path.join(directory, 'index.json'), 5, 1000);
-  let releases;
-  try {
-    releases = JSON.parse(fs.readFileSync(index, 'utf8'));
-  } catch {
-    throw new Error('Could not read the Node.js download list');
+  let installer = stageInstaller(bundledInstallerPaths().node, directory, 'node-x64.msi');
+  if (!installer) {
+    const index = await download(NODE_INDEX_URL, path.join(directory, 'index.json'), 5, 1000);
+    let releases;
+    try {
+      releases = JSON.parse(fs.readFileSync(index, 'utf8'));
+    } catch {
+      throw new Error('Could not read the Node.js download list');
+    }
+    installer = path.join(directory, 'node-x64.msi');
+    await download(nodeMsiUrl(releases), installer);
   }
-  const msiUrl = nodeMsiUrl(releases);
-  const installer = path.join(directory, 'node-x64.msi');
-  await download(msiUrl, installer);
   const code = await runProcess(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'msiexec.exe'), [
     '/i',
     installer,
@@ -183,6 +208,7 @@ async function installMissingPrerequisites({ rootDir }) {
 module.exports = {
   VC_REDIST_URL,
   NODE_INDEX_URL,
+  bundledInstallerPaths,
   hostAllowed,
   inspectPrerequisites,
   installMissingPrerequisites,
@@ -190,4 +216,5 @@ module.exports = {
   nodeIsNewEnough,
   nodeMsiUrl,
   redistExitOk,
+  stageInstaller,
 };
