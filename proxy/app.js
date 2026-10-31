@@ -3,7 +3,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { execFile, execFileSync, spawn } = require('node:child_process');
 const {
   createProxy,
   createRotatingLogger,
@@ -12,6 +12,7 @@ const {
   validateConfig,
   validateRoutes,
 } = require('./proxy.js');
+const { inspectPrerequisites, installMissingPrerequisites } = require('./prerequisites.js');
 
 function appDirectory() {
   if (process.env.APP_DIR) return path.resolve(process.env.APP_DIR);
@@ -174,6 +175,103 @@ function saveRoutes(routes) {
   return routes;
 }
 
+function isAdmin() {
+  try {
+    execFileSync('net', ['session'], { stdio: 'ignore', windowsHide: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function powershellQuote(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function elevatedSpec() {
+  if (process.pkg) return { file: process.execPath, args: ['--install-prerequisites'] };
+  return { file: process.execPath, args: [path.resolve(__filename), '--install-prerequisites'] };
+}
+
+function writeInstallResult(body) {
+  const directory = path.join(rootDir, 'installers');
+  fs.mkdirSync(directory, { recursive: true });
+  const resultPath = path.join(directory, 'result.json');
+  const temp = `${resultPath}.tmp`;
+  fs.writeFileSync(temp, JSON.stringify(body));
+  fs.renameSync(temp, resultPath);
+}
+
+function elevateAndInstall() {
+  const directory = path.join(rootDir, 'installers');
+  fs.mkdirSync(directory, { recursive: true });
+  const resultPath = path.join(directory, 'result.json');
+  const startedPath = path.join(directory, 'started.json');
+  fs.rmSync(resultPath, { force: true });
+  fs.rmSync(startedPath, { force: true });
+  const done = { finished: false, ok: false };
+  const spec = elevatedSpec();
+  const argumentList = spec.args.map(powershellQuote).join(',');
+  const command = `Start-Process -FilePath ${powershellQuote(spec.file)} -ArgumentList ${argumentList} -Verb RunAs -Wait`;
+  execFile('powershell.exe', ['-NoProfile', '-Command', command], { windowsHide: true }, (err) => {
+    done.finished = true;
+    done.ok = !err;
+  });
+  const deadline = Date.now() + 15 * 60 * 1000;
+  return new Promise((resolve, reject) => {
+    function tick() {
+      if (fs.existsSync(resultPath)) {
+        let parsed;
+        try {
+          parsed = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+        } catch (err) {
+          reject(err);
+          return;
+        }
+        if (!parsed.ok) {
+          reject(new Error(parsed.error || 'Install failed'));
+          return;
+        }
+        resolve(inspectPrerequisites());
+        return;
+      }
+      if (done.finished && !done.ok && !fs.existsSync(startedPath)) {
+        reject(new Error('Administrator approval was cancelled.'));
+        return;
+      }
+      if (Date.now() > deadline) {
+        reject(new Error('Install timed out.'));
+        return;
+      }
+      setTimeout(tick, 500);
+    }
+    tick();
+  });
+}
+
+async function installFromUi() {
+  const current = inspectPrerequisites();
+  if (!current.supported) throw new Error('This installer supports 64-bit Windows.');
+  if (current.items.every((item) => item.installed)) return current;
+  if (isAdmin()) return installMissingPrerequisites({ rootDir });
+  return elevateAndInstall();
+}
+
+async function installAndQuit() {
+  const directory = path.join(rootDir, 'installers');
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(path.join(directory, 'started.json'), '{}\n');
+  try {
+    await installMissingPrerequisites({ rootDir });
+    writeInstallResult({ ok: true, error: '' });
+    process.exit(0);
+  } catch (err) {
+    writeInstallResult({ ok: false, error: err.message });
+    console.error(err.message);
+    process.exit(1);
+  }
+}
+
 const page = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -208,6 +306,7 @@ const page = `<!DOCTYPE html>
     th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid #e6ebf0; font-size: 14px; }
     .error { color: #a33b32; min-height: 1.2em; }
     .hint { color: #526272; font-size: 13px; }
+    ul { margin: 0 0 12px; padding-left: 18px; }
   </style>
 </head>
 <body>
@@ -228,6 +327,13 @@ const page = `<!DOCTYPE html>
         </div>
         <p class="hint" id="logfile"></p>
         <p class="error" id="run-error"></p>
+      </div>
+      <div class="card">
+        <h2>Programs and libraries</h2>
+        <p class="hint">Installs the Visual C++ libraries and Node.js when this computer does not already have them. Windows asks for administrator approval. Start in this window already includes its own copy of the program.</p>
+        <ul id="prerequisites"></ul>
+        <button type="button" class="secondary" id="install-prerequisites">Install missing</button>
+        <p class="error" id="prerequisites-error"></p>
       </div>
       <div class="card">
         <pre id="log"></pre>
@@ -269,6 +375,7 @@ const page = `<!DOCTYPE html>
   <script>
     var routes = [];
     var stickToBottom = true;
+    var installing = false;
 
     function showPanel(name) {
       document.getElementById('panel-run').className = name === 'run' ? 'active' : '';
@@ -334,6 +441,27 @@ const page = `<!DOCTYPE html>
       }
     }
 
+    function drawPrerequisites(body) {
+      var list = document.getElementById('prerequisites');
+      list.innerHTML = '';
+      body.items.forEach(function (item) {
+        var row = document.createElement('li');
+        row.textContent = item.label + ' — ' + item.detail;
+        list.appendChild(row);
+      });
+      var missing = body.items.some(function (item) { return !item.installed; });
+      document.getElementById('install-prerequisites').disabled = installing || !missing || !body.supported;
+      if (!body.supported) setError('prerequisites-error', 'This installer supports 64-bit Windows.');
+    }
+
+    async function loadPrerequisites() {
+      try {
+        drawPrerequisites(await api('/api/prerequisites'));
+      } catch (err) {
+        setError('prerequisites-error', err.message);
+      }
+    }
+
     async function loadSettings() {
       var config = await api('/api/config');
       var form = document.getElementById('settings');
@@ -360,6 +488,20 @@ const page = `<!DOCTYPE html>
     document.getElementById('log').addEventListener('scroll', function (event) {
       var log = event.currentTarget;
       stickToBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    });
+    document.getElementById('install-prerequisites').addEventListener('click', async function () {
+      installing = true;
+      document.getElementById('install-prerequisites').disabled = true;
+      setError('prerequisites-error', 'Installing. Approve the Windows prompt if it appears.');
+      try {
+        drawPrerequisites(await api('/api/prerequisites/install', { method: 'POST' }));
+        setError('prerequisites-error', '');
+      } catch (err) {
+        setError('prerequisites-error', err.message);
+      } finally {
+        installing = false;
+        loadPrerequisites();
+      }
     });
     document.getElementById('start').addEventListener('click', async function () {
       try {
@@ -410,6 +552,7 @@ const page = `<!DOCTYPE html>
     });
 
     loadSettings().catch(function (err) { setError('settings-error', err.message); });
+    loadPrerequisites();
     refresh();
     setInterval(refresh, 1000);
   </script>
@@ -422,6 +565,14 @@ async function handle(req, res) {
     if (req.method === 'GET' && url.pathname === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(page);
+      return;
+    }
+    if (req.method === 'GET' && url.pathname === '/api/prerequisites') {
+      sendJson(res, 200, inspectPrerequisites());
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/prerequisites/install') {
+      sendJson(res, 200, await installFromUi());
       return;
     }
     if (req.method === 'GET' && url.pathname === '/api/status') {
@@ -466,6 +617,10 @@ function openBrowser(url) {
 }
 
 function main() {
+  if (process.argv.includes('--install-prerequisites')) {
+    installAndQuit();
+    return;
+  }
   const ui = http.createServer((req, res) => {
     handle(req, res).catch((err) => {
       if (!res.headersSent) sendJson(res, 500, { error: err.message });
