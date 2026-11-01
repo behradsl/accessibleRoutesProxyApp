@@ -69,8 +69,15 @@ function readScript() {
   return fs.readFileSync(path.join(__dirname, 'iis-forward.ps1'));
 }
 
+function scriptOnDisk(directory) {
+  fs.mkdirSync(directory, { recursive: true });
+  const destination = path.join(directory, 'iis-forward.ps1');
+  fs.writeFileSync(destination, readScript());
+  return destination;
+}
+
 function runPowershell(args, elevated) {
-  const script = path.join(__dirname, 'iis-forward.ps1');
+  const script = scriptOnDisk(args.physicalPath || path.dirname(args.resultPath));
   const resultPath = args.resultPath;
   const ps = powershellPath();
   const fileArgs = [
@@ -195,5 +202,6 @@ module.exports = {
   forwardingPlan,
   readScript,
   removeIisForwarding,
+  scriptOnDisk,
   selectSite,
 };
