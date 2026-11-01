@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 
-const { buildWebConfig, forwardingPlan, scriptOnDisk, selectSite } = require('./iis-proxy.js');
+const { buildWebConfig, forwardingPlan, scriptOnDisk, selectSite, stageFiles } = require('./iis-proxy.js');
 
 const config = {
   publicBaseUrl: 'https://rahkaran.nahavandcement.com/FAMmobileService',
@@ -40,7 +40,14 @@ test('the IIS script is written to a normal folder before PowerShell runs it', (
     const script = scriptOnDisk(dir);
     assert.equal(path.dirname(script), dir);
     assert.equal(script.includes(`${path.sep}snapshot${path.sep}`), false);
-    assert.equal(fs.readFileSync(script, 'utf8').includes('param('), true);
+    const text = fs.readFileSync(script, 'utf8');
+    assert.equal(text.includes('param('), true);
+    assert.equal(text.includes('Install-BundledModule'), true);
+    const source = path.join(dir, 'rewrite_amd64_en-US.msi');
+    fs.writeFileSync(source, 'rewrite-bytes');
+    const staged = stageFiles(path.join(dir, 'out'), [{ name: 'rewrite_amd64_en-US.msi', source }]);
+    assert.equal(fs.readFileSync(staged['rewrite_amd64_en-US.msi'], 'utf8'), 'rewrite-bytes');
+    assert.equal(staged['rewrite_amd64_en-US.msi'].includes(`${path.sep}snapshot${path.sep}`), false);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

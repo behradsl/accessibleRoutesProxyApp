@@ -76,8 +76,29 @@ function scriptOnDisk(directory) {
   return destination;
 }
 
+function iisInstallerSources() {
+  return [
+    { name: 'rewrite_amd64_en-US.msi', source: path.join(__dirname, 'vendor', 'rewrite_amd64_en-US.msi') },
+    { name: 'requestRouter_amd64.msi', source: path.join(__dirname, 'vendor', 'requestRouter_amd64.msi') },
+  ];
+}
+
+function stageFiles(directory, files) {
+  fs.mkdirSync(directory, { recursive: true });
+  const staged = {};
+  for (const file of files) {
+    if (!file.source || !fs.existsSync(file.source)) continue;
+    const destination = path.join(directory, file.name);
+    if (path.resolve(file.source) !== path.resolve(destination)) fs.copyFileSync(file.source, destination);
+    staged[file.name] = destination;
+  }
+  return staged;
+}
+
 function runPowershell(args, elevated) {
-  const script = scriptOnDisk(args.physicalPath || path.dirname(args.resultPath));
+  const directory = args.physicalPath || path.dirname(args.resultPath);
+  const script = scriptOnDisk(directory);
+  const installers = stageFiles(directory, iisInstallerSources());
   const resultPath = args.resultPath;
   const ps = powershellPath();
   const fileArgs = [
@@ -90,6 +111,8 @@ function runPowershell(args, elevated) {
     '-Port', String(args.port || 0),
     '-PhysicalPath', args.physicalPath || '',
     '-ResultPath', resultPath,
+    '-RewriteInstaller', installers['rewrite_amd64_en-US.msi'] || '',
+    '-ArrInstaller', installers['requestRouter_amd64.msi'] || '',
   ];
   if (!elevated) return spawnCollected(ps, fileArgs);
   const argumentList = fileArgs.map((value) => quote(value)).join(',');
@@ -204,4 +227,5 @@ module.exports = {
   removeIisForwarding,
   scriptOnDisk,
   selectSite,
+  stageFiles,
 };

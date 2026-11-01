@@ -366,7 +366,7 @@ const page = `<!DOCTYPE html>
     <section id="panel-manage">
       <div class="card">
         <h2>Settings</h2>
-        <p class="hint">Address changes are used the next time you press Start. Start registers the public path on the IIS site for that domain. Stop removes that path. The other applications on the site stay in place.</p>
+        <p class="hint">Address changes are used the next time you press Start. Start installs URL Rewrite and Application Request Routing from this program when IIS does not already have them, then registers the public path. Nothing is downloaded. Stop removes that path. The other applications on the site stay in place.</p>
         <form id="settings">
           <label>Rahkaran address<input name="erpBaseUrl" required></label>
           <label>Public address for the phone<input name="publicBaseUrl" required></label>
