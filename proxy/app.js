@@ -13,6 +13,7 @@ const {
   validateRoutes,
 } = require('./proxy.js');
 const { inspectPrerequisites, installMissingPrerequisites } = require('./prerequisites.js');
+const { applyIisForwarding, removeIisForwarding } = require('./iis-proxy.js');
 
 function appDirectory() {
   if (process.env.APP_DIR) return path.resolve(process.env.APP_DIR);
@@ -135,13 +136,36 @@ async function startProxy() {
       resolve();
     });
   });
+  try {
+    const iis = await applyIisForwarding(config, port, path.join(rootDir, 'iis-app'), {
+      skip: process.env.FAM_SKIP_IIS === '1',
+    });
+    if (iis && iis.skipped) logger.log('START', '-', 'IIS registration skipped');
+    else if (iis) logger.log('START', '-', `IIS site ${iis.site} forwards /${iis.alias}`);
+  } catch (err) {
+    state.server.close();
+    state.server.closeAllConnections();
+    state.server = null;
+    state.address = '';
+    logger.log('START', '-', err.message);
+    logger.stop();
+    throw err;
+  }
   return status();
 }
 
-function stopProxy() {
+async function stopProxy() {
   if (!state.server) return status();
   const server = state.server;
   const logger = state.logger;
+  try {
+    const removed = await removeIisForwarding(path.join(rootDir, 'iis-app'), {
+      skip: process.env.FAM_SKIP_IIS === '1',
+    });
+    if (removed && !process.env.FAM_SKIP_IIS) logger.log('STOP', '-', `removed /${removed.alias} from IIS`);
+  } catch (err) {
+    if (logger) logger.log('STOP', '-', err.message);
+  }
   state.server = null;
   state.address = '';
   if (logger) logger.log('STOP', '-', 'proxy stopped');
@@ -342,7 +366,7 @@ const page = `<!DOCTYPE html>
     <section id="panel-manage">
       <div class="card">
         <h2>Settings</h2>
-        <p class="hint">Address changes are used the next time you press Start. The phone uses the public address.</p>
+        <p class="hint">Address changes are used the next time you press Start. Start registers the public path on the IIS site for that domain. Stop removes that path. The other applications on the site stay in place.</p>
         <form id="settings">
           <label>Rahkaran address<input name="erpBaseUrl" required></label>
           <label>Public address for the phone<input name="publicBaseUrl" required></label>
@@ -584,7 +608,7 @@ async function handle(req, res) {
       return;
     }
     if (req.method === 'POST' && url.pathname === '/api/stop') {
-      sendJson(res, 200, stopProxy());
+      sendJson(res, 200, await stopProxy());
       return;
     }
     if (req.method === 'GET' && url.pathname === '/api/config') {

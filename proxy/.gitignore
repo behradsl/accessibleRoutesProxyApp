@@ -5,3 +5,4 @@ dist/
 installers/
 vendor/*.exe
 vendor/*.msi
+iis-app/

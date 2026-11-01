@@ -27,14 +27,10 @@ The API note did not include URLs for the warehouse voucher list, barcode print,
 ## Install on the portal server
 
 1. Open `FamMobileProxy.exe`. If Visual C++ or Node.js is missing, the program installs the copies it carries and asks for administrator approval. The server does not need internet for that. Node.js lands in `C:\Program Files\nodejs\node.exe`. The window itself already contains a copy, so Start works even if that install is declined. If you install Node somewhere else, change `processPath` in `web.config` once.
-2. Install HttpPlatformHandler if IIS does not already have it and the public site will start `proxy.js`. It is included in the ASP.NET Core Hosting Bundle. Pressing Start in the window does not need IIS.
-3. Copy this folder to the portal server. Leave `logs` in place. IIS writes the process output there.
-4. In IIS Manager, add an application on the existing public site, beside the transportation portal. The application path is the Rahkaran virtual directory (`/0407.4`, or whatever this customer uses). The physical path is this folder. The application pool is **No Managed Code**.
-5. Give that application pool identity permission to read this folder and to write `proxy.log` and `logs`.
-6. Edit `config.json`. On the portal server, open `erpBaseUrl` in a browser and confirm Rahkaran answers on the private network.
-7. Recycle the application pool. The phone's server address is `publicBaseUrl`.
-
-`web.config` is not part of adding a route. It only starts Node and keeps IIS from replacing the script's responses.
+2. Copy this folder to the portal server. Leave `logs` in place.
+3. Install the IIS extensions URL Rewrite and Application Request Routing once, if they are not already installed.
+4. In the program, set the public address to `https://the-portal-domain/FAMmobileService` and the path prefix to `/FAMmobileService`. Press Start. The program adds only that path on the IIS site that already has the domain, and forwards it to the local listener. Stop removes that path. The other applications on the site stay in place.
+5. On the portal server, open `erpBaseUrl` in a browser and confirm Rahkaran answers on the private network. The phone's server address is `publicBaseUrl`.
 
 ## When something fails
 

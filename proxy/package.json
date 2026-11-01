@@ -5,7 +5,8 @@
   "pkg": {
     "assets": [
       "vendor/vc_redist.x64.exe",
-      "vendor/node-x64.msi"
+      "vendor/node-x64.msi",
+      "iis-forward.ps1"
     ],
     "targets": [
       "node22-win-x64"
