@@ -1,12 +1,20 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 
 const { buildWebConfig, forwardingPlan, scriptOnDisk, selectSite, stageFiles } = require('./iis-proxy.js');
+
+function decodeCommandText(value) {
+  const buffer = Buffer.isBuffer(value) ? value : Buffer.from(String(value || ''));
+  const utf16 = (buffer.length >= 2 && buffer[0] === 0xFF && buffer[1] === 0xFE)
+    || (buffer.length >= 4 && buffer[1] === 0 && buffer[3] === 0);
+  return (utf16 ? buffer.toString('utf16le') : buffer.toString('utf8')).replace(/^\uFEFF/, '');
+}
 
 const config = {
   publicBaseUrl: 'https://rahkaran.nahavandcement.com/FAMmobileService',
@@ -43,11 +51,41 @@ test('the IIS script is written to a normal folder before PowerShell runs it', (
     const text = fs.readFileSync(script, 'utf8');
     assert.equal(text.includes('param('), true);
     assert.equal(text.includes('Install-BundledModule'), true);
+    assert.equal(text.includes('ProcessStartInfo'), true);
+    assert.equal(text.includes("ArgumentList @('/i'"), false);
     const source = path.join(dir, 'rewrite_amd64_en-US.msi');
     fs.writeFileSync(source, 'rewrite-bytes');
     const staged = stageFiles(path.join(dir, 'out'), [{ name: 'rewrite_amd64_en-US.msi', source }]);
     assert.equal(fs.readFileSync(staged['rewrite_amd64_en-US.msi'], 'utf8'), 'rewrite-bytes');
     assert.equal(staged['rewrite_amd64_en-US.msi'].includes(`${path.sep}snapshot${path.sep}`), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('Windows Installer accepts a package path that contains spaces', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fam msi '));
+  const installer = path.join(dir, 'fake package.msi');
+  fs.writeFileSync(installer, 'not a package');
+  const powershell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  try {
+    const run = spawnSync(powershell, [
+      '-NoProfile',
+      '-File',
+      path.join(__dirname, 'iis-forward.ps1'),
+      '-Action',
+      'probe-installer',
+      '-RewriteInstaller',
+      installer,
+    ], { timeout: 30000, windowsHide: true });
+    assert.equal(run.error, undefined);
+    const output = Buffer.isBuffer(run.stdout) ? run.stdout : Buffer.from(String(run.stdout || ''));
+    const text = decodeCommandText(output).trim();
+    const code = Number(text);
+    assert.equal(code === 1639, false);
+    assert.equal(code === 1619 || code === 1620, true);
+    const logText = decodeCommandText(fs.readFileSync(`${installer}.log`));
+    assert.equal(logText.includes('Verbose logging started'), true);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

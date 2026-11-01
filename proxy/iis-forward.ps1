@@ -1,5 +1,5 @@
 param(
-  [Parameter(Mandatory = $true)][ValidateSet('add', 'remove')][string]$Action,
+  [Parameter(Mandatory = $true)][ValidateSet('add', 'remove', 'probe-installer')][string]$Action,
   [string]$HostName = '',
   [string]$Alias = '',
   [int]$Port = 0,
@@ -28,16 +28,29 @@ function Test-Administrator {
   return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Get-MsiexecExitCode([string]$Installer) {
+  $package = $Installer.Replace('"', '')
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = Join-Path $env:SystemRoot 'System32\msiexec.exe'
+  $psi.Arguments = '/i "' + $package + '" /qn /norestart /l*v "' + $package + '.log"'
+  $psi.UseShellExecute = $false
+  $psi.CreateNoWindow = $true
+  $proc = New-Object System.Diagnostics.Process
+  $proc.StartInfo = $psi
+  if (-not $proc.Start()) { throw 'Windows Installer could not be started.' }
+  $proc.WaitForExit()
+  return $proc.ExitCode
+}
+
 function Install-BundledModule([string]$ModuleName, [string]$Installer, [string]$Label) {
   if (Get-WebGlobalModule -Name $ModuleName -ErrorAction SilentlyContinue) { return $false }
   if (-not (Test-Administrator)) { throw 'Access is denied. Administrator approval is required.' }
   if (-not $Installer -or -not (Test-Path -LiteralPath $Installer)) {
     throw "$Label is not included in this program."
   }
-  $proc = Start-Process -FilePath "$env:SystemRoot\System32\msiexec.exe" -ArgumentList @('/i', $Installer, '/qn', '/norestart') -Wait -PassThru
-  $code = $proc.ExitCode
+  $code = Get-MsiexecExitCode $Installer
   if ($code -ne 0 -and $code -ne 3010 -and $code -ne 1638 -and $code -ne 1641) {
-    throw "$Label install failed ($code)."
+    throw "$Label install failed ($code). Details are in $Installer.log"
   }
   if (-not (Get-WebGlobalModule -Name $ModuleName -ErrorAction SilentlyContinue)) {
     throw "$Label was installed, but IIS will load it after Windows restarts. Restart the server, then press Start again."
@@ -66,6 +79,11 @@ function Find-Site([string]$Name) {
   if ($blank.Count -eq 1) { return $blank[0] }
   if ($blank.Count -gt 1) { throw "More than one IIS site could receive $Name." }
   throw "No IIS site is bound to $Name."
+}
+
+if ($Action -eq 'probe-installer') {
+  Write-Output (Get-MsiexecExitCode $RewriteInstaller)
+  exit 0
 }
 
 try {
