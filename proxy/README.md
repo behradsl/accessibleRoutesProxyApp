@@ -28,9 +28,8 @@ The API note did not include URLs for the warehouse voucher list, barcode print,
 
 1. Open `FamMobileProxy.exe`. If Visual C++ or Node.js is missing, the program installs the copies it carries and asks for administrator approval. The server does not need internet for that. Node.js lands in `C:\Program Files\nodejs\node.exe`. The window itself already contains a copy, so Start works even if that install is declined. If you install Node somewhere else, change `processPath` in `web.config` once.
 2. Copy this folder to the portal server. Leave `logs` in place.
-3. Install the IIS extensions URL Rewrite and Application Request Routing once, if they are not already installed.
-4. In the program, set the public address to `https://the-portal-domain/FAMmobileService` and the path prefix to `/FAMmobileService`. Press Start. The program adds only that path on the IIS site that already has the domain, and forwards it to the local listener. Stop removes that path. The other applications on the site stay in place.
-5. On the portal server, open `erpBaseUrl` in a browser and confirm Rahkaran answers on the private network. The phone's server address is `publicBaseUrl`.
+3. In the program, set the public address to `https://the-portal-domain/FAMmobileService` and the path prefix to `/FAMmobileService`. Press Start. Start installs URL Rewrite and Application Request Routing from copies inside the program when IIS does not already have them, adds only that path on the IIS site that already has the domain, and forwards it to the local listener. Stop removes that path. The other applications on the site stay in place. Nothing is downloaded.
+4. On the portal server, open `erpBaseUrl` in a browser and confirm Rahkaran answers on the private network. The phone's server address is `publicBaseUrl`.
 
 ## When something fails
 

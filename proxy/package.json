@@ -6,6 +6,8 @@
     "assets": [
       "vendor/vc_redist.x64.exe",
       "vendor/node-x64.msi",
+      "vendor/rewrite_amd64_en-US.msi",
+      "vendor/requestRouter_amd64.msi",
       "iis-forward.ps1"
     ],
     "targets": [

@@ -4,7 +4,9 @@ param(
   [string]$Alias = '',
   [int]$Port = 0,
   [string]$PhysicalPath = '',
-  [string]$ResultPath = ''
+  [string]$ResultPath = '',
+  [string]$RewriteInstaller = '',
+  [string]$ArrInstaller = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,6 +21,28 @@ function Write-Result([bool]$Ok, [string]$Message, [string]$Site) {
     Set-Content -Path $ResultPath -Value $payload -Encoding UTF8
   }
   Write-Output $payload
+}
+
+function Test-Administrator {
+  $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+  return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Install-BundledModule([string]$ModuleName, [string]$Installer, [string]$Label) {
+  if (Get-WebGlobalModule -Name $ModuleName -ErrorAction SilentlyContinue) { return $false }
+  if (-not (Test-Administrator)) { throw 'Access is denied. Administrator approval is required.' }
+  if (-not $Installer -or -not (Test-Path -LiteralPath $Installer)) {
+    throw "$Label is not included in this program."
+  }
+  $proc = Start-Process -FilePath "$env:SystemRoot\System32\msiexec.exe" -ArgumentList @('/i', $Installer, '/qn', '/norestart') -Wait -PassThru
+  $code = $proc.ExitCode
+  if ($code -ne 0 -and $code -ne 3010 -and $code -ne 1638 -and $code -ne 1641) {
+    throw "$Label install failed ($code)."
+  }
+  if (-not (Get-WebGlobalModule -Name $ModuleName -ErrorAction SilentlyContinue)) {
+    throw "$Label was installed, but IIS will load it after Windows restarts. Restart the server, then press Start again."
+  }
+  return $true
 }
 
 function Find-Site([string]$Name) {
@@ -61,12 +85,15 @@ try {
     exit 0
   }
 
-  if (-not (Get-WebGlobalModule -Name 'RewriteModule' -ErrorAction SilentlyContinue)) {
-    throw 'URL Rewrite is not installed.'
+  $installed = @()
+  if (Install-BundledModule 'RewriteModule' $RewriteInstaller 'URL Rewrite') {
+    $installed += 'URL Rewrite'
   }
-  if (-not (Get-WebGlobalModule -Name 'ApplicationRequestRouting' -ErrorAction SilentlyContinue)) {
-    throw 'Application Request Routing is not installed.'
+  if (Install-BundledModule 'ApplicationRequestRouting' $ArrInstaller 'Application Request Routing') {
+    $installed += 'Application Request Routing'
   }
+  $note = ''
+  if ($installed.Count -gt 0) { $note = "Installed $($installed -join ' and '). " }
   Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter 'system.webServer/proxy' -Name 'enabled' -Value 'True'
   try {
     Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter 'system.webServer/proxy' -Name 'timeout' -Value '00:03:20'
@@ -87,7 +114,7 @@ try {
   } else {
     New-WebApplication -Name $Alias -Site $siteName -PhysicalPath $PhysicalPath -ApplicationPool $pool | Out-Null
   }
-  Write-Result $true "IIS site $siteName now forwards /$Alias." $siteName
+  Write-Result $true ($note + "IIS site $siteName now forwards /$Alias.") $siteName
   exit 0
 } catch {
   Write-Result $false $_.Exception.Message ''
