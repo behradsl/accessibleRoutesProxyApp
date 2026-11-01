@@ -1,9 +1,12 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { test } = require('node:test');
 
-const { buildWebConfig, forwardingPlan, selectSite } = require('./iis-proxy.js');
+const { buildWebConfig, forwardingPlan, scriptOnDisk, selectSite } = require('./iis-proxy.js');
 
 const config = {
   publicBaseUrl: 'https://rahkaran.nahavandcement.com/FAMmobileService',
@@ -29,6 +32,18 @@ test('a prefix with more than one segment is refused', () => {
     () => forwardingPlan({ ...config, publicPathPrefix: '/FAMmobileService/extra' }, 5080),
     /one segment/,
   );
+});
+
+test('the IIS script is written to a normal folder before PowerShell runs it', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fam-iis-script-'));
+  try {
+    const script = scriptOnDisk(dir);
+    assert.equal(path.dirname(script), dir);
+    assert.equal(script.includes(`${path.sep}snapshot${path.sep}`), false);
+    assert.equal(fs.readFileSync(script, 'utf8').includes('param('), true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('the site is chosen by the public host name', () => {
